@@ -1,0 +1,7 @@
+# MPLAB X build outputs
+build/
+dist/
+debug/
+.generated_files/
+queuelogs/
+nbproject/private/
