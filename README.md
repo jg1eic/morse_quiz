@@ -71,7 +71,10 @@ ATtiny202 で動くモールス符号クイズキットのファームウェア�
 - 書き込み器：PICkit 5 など UPDI 対応の書き込み器
 
 MPLAB X でこのフォルダをプロジェクトとして開き、ビルドして書き込んでください。
-生成される HEX は `dist/default/production/KEYER_QUIZ.X.production.hex` です。
+
+ビルド済みの HEX ファイルもリポジトリに含めています。ビルドせずに書き込むだけなら、こちらを使ってください。
+
+- [`dist/default/production/KEYER_QUIZ.X.production.hex`](dist/default/production/KEYER_QUIZ.X.production.hex)
 
 ## 調整用パラメータ
 
