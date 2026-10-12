@@ -74,7 +74,7 @@ MPLAB X でこのフォルダをプロジェクトとして開き、ビルドし
 
 ビルド済みの HEX ファイルもリポジトリに含めています。ビルドせずに書き込むだけなら、こちらを使ってください。
 
-- [`dist/default/production/KEYER_QUIZ.X.production.hex`](dist/default/production/KEYER_QUIZ.X.production.hex)
+- [`dist/default/production/morse_quiz.production.hex`](dist/default/production/morse_quiz.production.hex)
 
 ## 調整用パラメータ
 

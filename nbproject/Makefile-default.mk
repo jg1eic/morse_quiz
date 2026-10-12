@@ -30,12 +30,12 @@ ifeq ($(TYPE_IMAGE), DEBUG_RUN)
 IMAGE_TYPE=debug
 OUTPUT_SUFFIX=elf
 DEBUGGABLE_SUFFIX=elf
-FINAL_IMAGE=${DISTDIR}/KEYER_QUIZ.X.${IMAGE_TYPE}.${OUTPUT_SUFFIX}
+FINAL_IMAGE=${DISTDIR}/morse_quiz.${IMAGE_TYPE}.${OUTPUT_SUFFIX}
 else
 IMAGE_TYPE=production
 OUTPUT_SUFFIX=hex
 DEBUGGABLE_SUFFIX=elf
-FINAL_IMAGE=${DISTDIR}/KEYER_QUIZ.X.${IMAGE_TYPE}.${OUTPUT_SUFFIX}
+FINAL_IMAGE=${DISTDIR}/morse_quiz.${IMAGE_TYPE}.${OUTPUT_SUFFIX}
 endif
 
 ifeq ($(COMPARE_BUILD), true)
@@ -86,7 +86,7 @@ FIXDEPS=fixDeps
 ifneq ($(INFORMATION_MESSAGE), )
 	@echo $(INFORMATION_MESSAGE)
 endif
-	${MAKE}  -f nbproject/Makefile-default.mk ${DISTDIR}/KEYER_QUIZ.X.${IMAGE_TYPE}.${OUTPUT_SUFFIX}
+	${MAKE}  -f nbproject/Makefile-default.mk ${DISTDIR}/morse_quiz.${IMAGE_TYPE}.${OUTPUT_SUFFIX}
 
 MP_PROCESSOR_OPTION=ATtiny202
 # ------------------------------------------------------------------------------------
@@ -104,14 +104,14 @@ endif
 # ------------------------------------------------------------------------------------
 # Rules for buildStep: compile
 ifeq ($(TYPE_IMAGE), DEBUG_RUN)
-${OBJECTDIR}/morse_quiz.o: morse_quiz.c  .generated_files/flags/default/a045105bc3909d4b09bbaa5ff2cbc28f188940c3 .generated_files/flags/default/da39a3ee5e6b4b0d3255bfef95601890afd80709
+${OBJECTDIR}/morse_quiz.o: morse_quiz.c  .generated_files/flags/default/961938b1729656ebbabe8034c35995e2d932d7bf .generated_files/flags/default/da39a3ee5e6b4b0d3255bfef95601890afd80709
 	@${MKDIR} "${OBJECTDIR}" 
 	@${RM} ${OBJECTDIR}/morse_quiz.o.d 
 	@${RM} ${OBJECTDIR}/morse_quiz.o 
 	 ${MP_CC}  $(MP_EXTRA_CC_PRE) -mmcu=attiny202 ${PACK_COMPILER_OPTIONS} ${PACK_COMMON_OPTIONS} -g -DDEBUG  -gdwarf-2  -x c -c -D__$(MP_PROCESSOR_OPTION)__  -funsigned-char -funsigned-bitfields -Os -ffunction-sections -fdata-sections -fpack-struct -fshort-enums -Wall -MD -MP -MF "${OBJECTDIR}/morse_quiz.o.d" -MT "${OBJECTDIR}/morse_quiz.o.d" -MT ${OBJECTDIR}/morse_quiz.o  -o ${OBJECTDIR}/morse_quiz.o morse_quiz.c  -DXPRJ_default=$(CND_CONF)  $(COMPARISON_BUILD) 
 	
 else
-${OBJECTDIR}/morse_quiz.o: morse_quiz.c  .generated_files/flags/default/931879e6b01ca11e52fbfcc7f8bb8b2d45417a6c .generated_files/flags/default/da39a3ee5e6b4b0d3255bfef95601890afd80709
+${OBJECTDIR}/morse_quiz.o: morse_quiz.c  .generated_files/flags/default/273b7964ae70b975dff750f8713827cc6e6c5609 .generated_files/flags/default/da39a3ee5e6b4b0d3255bfef95601890afd80709
 	@${MKDIR} "${OBJECTDIR}" 
 	@${RM} ${OBJECTDIR}/morse_quiz.o.d 
 	@${RM} ${OBJECTDIR}/morse_quiz.o 
@@ -128,9 +128,9 @@ endif
 # ------------------------------------------------------------------------------------
 # Rules for buildStep: link
 ifeq ($(TYPE_IMAGE), DEBUG_RUN)
-${DISTDIR}/KEYER_QUIZ.X.${IMAGE_TYPE}.${OUTPUT_SUFFIX}: ${OBJECTFILES}  nbproject/Makefile-${CND_CONF}.mk    
+${DISTDIR}/morse_quiz.${IMAGE_TYPE}.${OUTPUT_SUFFIX}: ${OBJECTFILES}  nbproject/Makefile-${CND_CONF}.mk    
 	@${MKDIR} ${DISTDIR} 
-	${MP_CC} $(MP_EXTRA_LD_PRE) -mmcu=attiny202 ${PACK_COMMON_OPTIONS}   -gdwarf-2 -D__$(MP_PROCESSOR_OPTION)__  -Wl,-Map="${DISTDIR}\KEYER_QUIZ.X.${IMAGE_TYPE}.map"    -o ${DISTDIR}/KEYER_QUIZ.X.${IMAGE_TYPE}.${OUTPUT_SUFFIX} ${OBJECTFILES_QUOTED_IF_SPACED}      -DXPRJ_default=$(CND_CONF)  $(COMPARISON_BUILD)  -Wl,--defsym=__MPLAB_BUILD=1$(MP_EXTRA_LD_POST)$(MP_LINKER_FILE_OPTION),--defsym=__ICD2RAM=1,--defsym=__MPLAB_DEBUG=1,--defsym=__DEBUG=1 -Wl,--gc-sections -Wl,--start-group  -Wl,-lm -Wl,--end-group 
+	${MP_CC} $(MP_EXTRA_LD_PRE) -mmcu=attiny202 ${PACK_COMMON_OPTIONS}   -gdwarf-2 -D__$(MP_PROCESSOR_OPTION)__  -Wl,-Map="${DISTDIR}\morse_quiz.${IMAGE_TYPE}.map"    -o ${DISTDIR}/morse_quiz.${IMAGE_TYPE}.${OUTPUT_SUFFIX} ${OBJECTFILES_QUOTED_IF_SPACED}      -DXPRJ_default=$(CND_CONF)  $(COMPARISON_BUILD)  -Wl,--defsym=__MPLAB_BUILD=1$(MP_EXTRA_LD_POST)$(MP_LINKER_FILE_OPTION),--defsym=__ICD2RAM=1,--defsym=__MPLAB_DEBUG=1,--defsym=__DEBUG=1 -Wl,--gc-sections -Wl,--start-group  -Wl,-lm -Wl,--end-group 
 	
 	
 	
@@ -138,10 +138,10 @@ ${DISTDIR}/KEYER_QUIZ.X.${IMAGE_TYPE}.${OUTPUT_SUFFIX}: ${OBJECTFILES}  nbprojec
 	
 	
 else
-${DISTDIR}/KEYER_QUIZ.X.${IMAGE_TYPE}.${OUTPUT_SUFFIX}: ${OBJECTFILES}  nbproject/Makefile-${CND_CONF}.mk   
+${DISTDIR}/morse_quiz.${IMAGE_TYPE}.${OUTPUT_SUFFIX}: ${OBJECTFILES}  nbproject/Makefile-${CND_CONF}.mk   
 	@${MKDIR} ${DISTDIR} 
-	${MP_CC} $(MP_EXTRA_LD_PRE) -mmcu=attiny202 ${PACK_COMMON_OPTIONS}  -D__$(MP_PROCESSOR_OPTION)__  -Wl,-Map="${DISTDIR}\KEYER_QUIZ.X.${IMAGE_TYPE}.map"    -o ${DISTDIR}/KEYER_QUIZ.X.${IMAGE_TYPE}.${DEBUGGABLE_SUFFIX} ${OBJECTFILES_QUOTED_IF_SPACED}      -DXPRJ_default=$(CND_CONF)  $(COMPARISON_BUILD)  -Wl,--defsym=__MPLAB_BUILD=1$(MP_EXTRA_LD_POST)$(MP_LINKER_FILE_OPTION) -Wl,--gc-sections -Wl,--start-group  -Wl,-lm -Wl,--end-group 
-	${MP_CC_DIR}\\avr-objcopy -O ihex "${DISTDIR}/KEYER_QUIZ.X.${IMAGE_TYPE}.${DEBUGGABLE_SUFFIX}" "${DISTDIR}/KEYER_QUIZ.X.${IMAGE_TYPE}.hex"
+	${MP_CC} $(MP_EXTRA_LD_PRE) -mmcu=attiny202 ${PACK_COMMON_OPTIONS}  -D__$(MP_PROCESSOR_OPTION)__  -Wl,-Map="${DISTDIR}\morse_quiz.${IMAGE_TYPE}.map"    -o ${DISTDIR}/morse_quiz.${IMAGE_TYPE}.${DEBUGGABLE_SUFFIX} ${OBJECTFILES_QUOTED_IF_SPACED}      -DXPRJ_default=$(CND_CONF)  $(COMPARISON_BUILD)  -Wl,--defsym=__MPLAB_BUILD=1$(MP_EXTRA_LD_POST)$(MP_LINKER_FILE_OPTION) -Wl,--gc-sections -Wl,--start-group  -Wl,-lm -Wl,--end-group 
+	${MP_CC_DIR}\\avr-objcopy -O ihex "${DISTDIR}/morse_quiz.${IMAGE_TYPE}.${DEBUGGABLE_SUFFIX}" "${DISTDIR}/morse_quiz.${IMAGE_TYPE}.hex"
 	
 	
 	
