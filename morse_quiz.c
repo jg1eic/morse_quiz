@@ -26,16 +26,24 @@
  * Speed (5 / 10 / 15 / 20 WPM, default 5; saved in EEPROM)
  *   Hold the button while powering on -> speed setup: plays "V" (...-) at
  *   the current speed. Short press = next speed (5 -> 10 -> 15 -> 20 -> 5),
- *   hold >= MODE_HOLD_MS = save to EEPROM ("pin-pon") and start normally.
+ *   hold reaching MODE_HOLD_MS = save to EEPROM and "pin-pon" right away
+ *   (still held), then start normally after release.
  *   Playback and input timing both follow the selected speed.
+ *
+ * Volume (bridge / single-ended drive, default bridge; saved in EEPROM)
+ *   Hold the button >= DRIVE_HOLD_MS while powering on (the LED lights at
+ *   that point; then release) -> volume setup: plays "V" with the current
+ *   drive. Short press = toggle bridge (loud) / single-ended (about -6 dB),
+ *   hold reaching MODE_HOLD_MS = save to EEPROM and "pin-pon" right away
+ *   (still held), then start normally after release.
  *   Note: a UPDI chip erase also clears EEPROM unless the EESAVE fuse is set.
  *
  * Pins (ATtiny202, 8-pin SOIC/DIP)   *** PA4/PA5 do not exist on this part ***
  *   pin 1  VDD
  *   pin 2  PA6  LED (via resistor to GND, drive high = on)
  *   pin 3  PA7  push button to GND (internal pull-up)
- *   pin 4  PA1  piezo speaker terminal A  } driven in opposite phase
- *   pin 5  PA2  piezo speaker terminal B  } (2x VDD swing, about +6 dB)
+ *   pin 4  PA1  piezo speaker terminal A  } bridge: opposite phase (2x VDD swing,
+ *   pin 5  PA2  piezo speaker terminal B  } +6 dB); single-ended: PA2 stays low
  *   pin 6  PA0  UPDI
  *   pin 7  PA3  (spare)
  *   pin 8  GND
@@ -65,6 +73,7 @@
 #define MODE_HOLD_MS     2000u  /* hold this long -> switch mode                 */
 #define WABUN_HOLD_MS    1000u  /* first press held this long -> Wabun          */
 #define VDD_HOLD_MS      5000u  /* first press held this long -> battery check  */
+#define DRIVE_HOLD_MS    3000u  /* held this long at power-on -> volume setup   */
 #define DEBOUNCE_MS      20u
 #define MAX_SYMBOLS      6u     /* more dit/dah than this is treated as invalid  */
 #define RANDOM_GAP_MS    900u   /* pause between characters in RANDOM mode       */
@@ -83,13 +92,17 @@
 #define LED_bm     PIN6_bm      /* PA6 */
 
 /* ------------------------------------------------------------------ */
-/* Speed                                                               */
+/* Settings (speed / volume), kept in EEPROM                           */
 /* ------------------------------------------------------------------ */
 #define N_SPEEDS   4u
 static const uint8_t UNIT_MS[N_SPEEDS] = { 240, 120, 80, 60 };  /* 5/10/15/20 WPM */
-#define EE_SPEED   (*(volatile uint8_t *)(EEPROM_START + 0u))    /* speed index    */
+#define EE_CFG     ((volatile uint8_t *)EEPROM_START)
+#define CFG_SPEED  0u           /* speed index                                     */
+#define CFG_DRIVE  1u           /* 1 = bridge, 0 = single-ended (blank 0xFF -> bridge) */
 
+static uint8_t g_cfg[2];        /* RAM copy of the settings */
 static uint8_t g_unit;          /* current Morse unit in ms */
+static uint8_t g_spk_tgl;       /* speaker pins toggled by the tone ISR */
 
 /* ------------------------------------------------------------------ */
 /* Time base: TCB0 1 ms tick                                           */
@@ -120,12 +133,12 @@ static void wait_ms(uint16_t ms)
 }
 
 /* ------------------------------------------------------------------ */
-/* Piezo speaker tone: PA1/PA2 in opposite phase (bridge drive),      */
-/* both toggled at once by the TCA0 overflow ISR                       */
+/* Piezo speaker tone: bridge = PA1/PA2 in opposite phase, both       */
+/* toggled at once; single-ended = only PA1 toggles, PA2 stays low     */
 /* ------------------------------------------------------------------ */
 ISR(TCA0_OVF_vect)
 {
-    PORTA.OUTTGL = SPK_bm;
+    PORTA.OUTTGL = g_spk_tgl;
     TCA0.SINGLE.INTFLAGS = TCA_SINGLE_OVF_bm;
 }
 
@@ -158,8 +171,9 @@ static void tone_on(uint16_t per)       /* per = TONE_PER(hz), 0 = silence */
 /* ------------------------------------------------------------------ */
 /* LED                                                                 */
 /* ------------------------------------------------------------------ */
-static inline void led_on(void)  { PORTA.OUTSET = LED_bm; }
-static inline void led_off(void) { PORTA.OUTCLR = LED_bm; }
+/* VPORTA (I/O space): single sbi/cbi instructions, smaller than PORTA.OUTSET */
+static inline void led_on(void)  { VPORTA.OUT |= LED_bm; }
+static inline void led_off(void) { VPORTA.OUT &= (uint8_t)~LED_bm; }
 
 /* ------------------------------------------------------------------ */
 /* Sound sequencer: array of {period, duration}, per==0 is a rest     */
@@ -306,7 +320,7 @@ static uint8_t pick_index(uint8_t avoid)
 /* ------------------------------------------------------------------ */
 static inline bool btn_down(void)
 {
-    return (PORTA.IN & BTN_bm) == 0;
+    return (VPORTA.IN & BTN_bm) == 0;       /* sbic: smaller than PORTA.IN */
 }
 
 static void wait_release(void)
@@ -537,32 +551,46 @@ static void report_vdd(void)
 }
 
 /* ------------------------------------------------------------------ */
-/* Speed setup (button held at power-on)                               */
+/* Settings setup (button held at power-on)                            */
 /* ------------------------------------------------------------------ */
-static void speed_setup(uint8_t sp)
+static void apply_cfg(void)
+{
+    g_unit = UNIT_MS[g_cfg[CFG_SPEED]];
+    g_spk_tgl = g_cfg[CFG_DRIVE] ? SPK_bm : SPKA_bm;
+}
+
+/* Short press = next value (g_cfg[k] + 1) & mask. A hold is saved as soon as it
+ * reaches MODE_HOLD_MS ("pin-pon" while still held), so the player knows when
+ * to let go; returns after release. */
+static void cfg_setup(uint8_t k, uint8_t mask)
 {
     wait_release();
     for (;;) {
-        g_unit = UNIT_MS[sp];
+        apply_cfg();
         wait_ms(500);
-        play_char(0x11);                        /* V ...- at this speed */
+        play_char(0x11);                        /* V ...- with this setting */
         while (!btn_down()) {
             sleep_mode();
         }
         uint16_t t_press = ms_now();
-        wait_release();
-        if ((uint16_t)(ms_now() - t_press) >= MODE_HOLD_MS) {
-            break;
+        while (btn_down() && (uint16_t)(ms_now() - t_press) < MODE_HOLD_MS) {
+            sleep_mode();
         }
-        sp = (uint8_t)((sp + 1u) & (N_SPEEDS - 1u));
+        if (btn_down()) {
+            break;                              /* held MODE_HOLD_MS: save now */
+        }
+        wait_ms(DEBOUNCE_MS);
+        g_cfg[k] = (uint8_t)((g_cfg[k] + 1u) & mask);
     }
-    if (EE_SPEED != sp) {
-        EE_SPEED = sp;                          /* load EEPROM page buffer */
+    if (EE_CFG[k] != g_cfg[k]) {
+        EE_CFG[k] = g_cfg[k];                   /* load EEPROM page buffer (only */
+                                                /* loaded bytes are erased/written) */
         _PROTECTED_WRITE_SPM(NVMCTRL.CTRLA, NVMCTRL_CMD_PAGEERASEWRITE_gc);
         while (NVMCTRL.STATUS & NVMCTRL_EEBUSY_bm) {
         }
     }
     feedback_correct();                         /* saved */
+    wait_release();                             /* don't pass the hold on as the first press */
 }
 
 /* ------------------------------------------------------------------ */
@@ -591,14 +619,30 @@ int main(void)
 {
     init();
 
-    uint8_t sp = EE_SPEED;
+    uint8_t sp = EE_CFG[CFG_SPEED];
     if (sp >= N_SPEEDS) {
         sp = 0;                                 /* blank EEPROM (0xFF) -> 5 WPM */
     }
-    g_unit = UNIT_MS[sp];
+    g_cfg[CFG_SPEED] = sp;
+    g_cfg[CFG_DRIVE] = EE_CFG[CFG_DRIVE] & 1u;  /* blank EEPROM (0xFF) -> bridge */
+    apply_cfg();
     wait_ms(DEBOUNCE_MS);
     if (btn_down()) {
-        speed_setup(sp);
+        /* Released before DRIVE_HOLD_MS = speed setup, after = volume setup
+         * (the LED lights at DRIVE_HOLD_MS to tell the player to release). */
+        uint16_t t_press = ms_now();
+        uint8_t k = CFG_SPEED;
+        uint8_t mask = N_SPEEDS - 1u;
+        while (btn_down()) {
+            if ((uint16_t)(ms_now() - t_press) >= DRIVE_HOLD_MS) {
+                k = CFG_DRIVE;
+                mask = 1u;
+                led_on();
+            }
+            sleep_mode();
+        }
+        led_off();
+        cfg_setup(k, mask);
     }
 
     PLAY(SND_START, true);
