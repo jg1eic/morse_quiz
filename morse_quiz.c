@@ -339,7 +339,7 @@ ISR(PORTA_PORT_vect)
 }
 
 /* Full power-down: everything (CPU, TCB0 tick, TCA0 tone) stops. Woken only
- * by a button press (falling-edge PORTA interrupt configured in init()). */
+ * by a button press (PORTA pin interrupt configured in init()). */
 static void power_down(void)
 {
     set_sleep_mode(SLEEP_MODE_PWR_DOWN);
@@ -600,8 +600,8 @@ static void init(void)
 {
     /* Pins */
     PORTA.DIRSET = SPK_bm | LED_bm;
-    PORTA.PIN7CTRL = PORT_PULLUPEN_bm | PORT_ISC_FALLING_gc;   /* button (PA7);  */
-    /* falling edge = press; PORT interrupts are async and wake from POWER-DOWN */
+    PORTA.PIN7CTRL = PORT_PULLUPEN_bm | PORT_ISC_BOTHEDGES_gc; /* button (PA7)  */
+    /* PA7 is not a fully async pin: only BOTHEDGES/LEVEL can wake POWER-DOWN */
     PORTA.PIN3CTRL = PORT_ISC_INPUT_DISABLE_gc; /* PA3 unused: no floating-input current */
     tone_off();
     led_off();
