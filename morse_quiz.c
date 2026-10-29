@@ -10,8 +10,11 @@
  *   (QUIZ -> RANDOM -> QUIZ -> ...).
  *   About POWERDOWN_MS of no button activity in QUIZ (or before the very
  *   first press) puts the MCU into full POWER-DOWN sleep; a button press
- *   wakes it via a PORTA pin interrupt (asynchronous, works with all clocks
- *   stopped). RANDOM keeps playing and never powers down on its own.
+ *   wakes it via the PA7 pin interrupt (BOTHEDGES: PA7 is not a fully
+ *   asynchronous pin, so a single-edge setting would not wake it with all
+ *   clocks stopped). RANDOM powers down after RANDOM_OFF_MIN minutes
+ *   without button activity (a short tap restarts the count); a press
+ *   wakes it and playback resumes in the same mode.
  *
  * Character set (chosen once, by the very first press after power-on)
  *   press < 1 s       -> Latin A-Z        (no confirm tone)
@@ -79,6 +82,7 @@
 #define RANDOM_GAP_MS    900u   /* pause between characters in RANDOM mode       */
 #define POWERDOWN_MS     30000u /* no button activity this long -> power down    */
 #define POWERDOWN_IDLE_CYCLES (POWERDOWN_MS / IDLE_REPLAY_MS)  /* same, in QUIZ replay cycles */
+#define RANDOM_OFF_MIN   1u    /* RANDOM: no button activity this many minutes -> power down */
 
 #define MORSE_HZ         741u   /* piezo is louder near its resonance; tune by ear */
 
@@ -128,7 +132,7 @@ static void wait_ms(uint16_t ms)
 {
     uint16_t t0 = ms_now();
     while ((uint16_t)(ms_now() - t0) < ms) {
-        sleep_mode();          /* IDLE: CPU stops, TCB0/TCA0 keep running */
+        sleep_cpu();          /* IDLE: CPU stops, TCB0/TCA0 keep running */
     }
 }
 
@@ -326,7 +330,7 @@ static inline bool btn_down(void)
 static void wait_release(void)
 {
     while (btn_down()) {
-        sleep_mode();
+        sleep_cpu();
     }
     wait_ms(DEBOUNCE_MS);
 }
@@ -342,9 +346,9 @@ ISR(PORTA_PORT_vect)
  * by a button press (PORTA pin interrupt configured in init()). */
 static void power_down(void)
 {
-    set_sleep_mode(SLEEP_MODE_PWR_DOWN);
-    sleep_mode();
-    set_sleep_mode(SLEEP_MODE_IDLE);    /* restore normal IDLE sleep afterwards */
+    SLPCTRL.CTRLA = SLPCTRL_SMODE_PDOWN_gc | SLPCTRL_SEN_bm;
+    sleep_cpu();
+    SLPCTRL.CTRLA = SLPCTRL_SMODE_IDLE_gc | SLPCTRL_SEN_bm; /* back to IDLE */
     wait_release();                     /* debounce + swallow the waking press  */
 }
 
@@ -376,7 +380,7 @@ static uint8_t collect_input(void)
             } else if ((uint16_t)(now - t_rel) >= CHAR_GAP_MS) {
                 return over ? CODE_INVALID : acc;
             }
-            sleep_mode();
+            sleep_cpu();
         }
         wait_ms(DEBOUNCE_MS);
         if (!btn_down()) {
@@ -393,7 +397,7 @@ static uint8_t collect_input(void)
                 wait_release();
                 return CODE_MODE;
             }
-            sleep_mode();
+            sleep_cpu();
         }
         uint16_t dur = (uint16_t)(ms_now() - t_press);
         tone_off();
@@ -466,12 +470,17 @@ static void run_quiz(void)
     }
 }
 
+#define GAP_NONE  0u            /* no button activity        */
+#define GAP_TAP   1u            /* short tap (otherwise ignored) */
+#define GAP_MODE  2u            /* held: switch mode         */
+
 /*
- * Waits up to ms, but returns early (true) if the button is held long
- * enough to request a mode switch. A short tap is debounced and ignored.
+ * Waits up to ms, but returns early (GAP_MODE) if the button is held long
+ * enough to request a mode switch. A short tap is debounced and reported.
  */
-static bool wait_gap_or_modeswitch(uint16_t ms)
+static uint8_t wait_gap_or_modeswitch(uint16_t ms)
 {
+    uint8_t r = GAP_NONE;
     uint16_t t0 = ms_now();
     while ((uint16_t)(ms_now() - t0) < ms) {
         if (btn_down()) {
@@ -481,28 +490,46 @@ static bool wait_gap_or_modeswitch(uint16_t ms)
                 if ((uint16_t)(ms_now() - t_press) >= MODE_HOLD_MS) {
                     led_off();
                     wait_release();
-                    return true;
+                    return GAP_MODE;
                 }
-                sleep_mode();
+                sleep_cpu();
             }
             led_off();
-            wait_ms(DEBOUNCE_MS);       /* short tap: ignored in this mode */
+            wait_ms(DEBOUNCE_MS);
+            r = GAP_TAP;
         }
-        sleep_mode();
+        sleep_cpu();
     }
-    return false;
+    return r;
 }
 
 /* Listening practice: plays random characters back to back, no input needed.
+ * After RANDOM_OFF_MIN minutes without button activity it powers down (a
+ * short tap restarts the count); a press wakes it and playback resumes.
  * Returns when the player asks for a mode switch. */
 static void run_random(void)
 {
     uint8_t idx = pick_index(0xFF);
+    uint16_t t_min = ms_now();          /* start of the current minute */
+    uint8_t minutes = 0;
 
     for (;;) {
         play_char(CHARSET[idx]);
-        if (wait_gap_or_modeswitch(RANDOM_GAP_MS)) {
+        uint8_t g = wait_gap_or_modeswitch(RANDOM_GAP_MS);
+        if (g == GAP_MODE) {
             return;
+        }
+        /* One character + gap is far below the 65 s wrap of ms_now(). */
+        if ((uint16_t)(ms_now() - t_min) >= 60000u) {
+            t_min += 60000u;
+            minutes++;
+        }
+        if (g == GAP_TAP || minutes >= RANDOM_OFF_MIN) {
+            if (g == GAP_NONE) {
+                power_down();               /* returns after the waking press */
+            }
+            t_min = ms_now();
+            minutes = 0;
         }
         idx = pick_index(idx);
     }
@@ -570,11 +597,11 @@ static void cfg_setup(uint8_t k, uint8_t mask)
         wait_ms(500);
         play_char(0x11);                        /* V ...- with this setting */
         while (!btn_down()) {
-            sleep_mode();
+            sleep_cpu();
         }
         uint16_t t_press = ms_now();
         while (btn_down() && (uint16_t)(ms_now() - t_press) < MODE_HOLD_MS) {
-            sleep_mode();
+            sleep_cpu();
         }
         if (btn_down()) {
             break;                              /* held MODE_HOLD_MS: save now */
@@ -611,7 +638,9 @@ static void init(void)
     TCB0.INTCTRL = TCB_CAPT_bm;
     TCB0.CTRLA   = TCB_ENABLE_bm;               /* CLKSEL = CLK_PER (DIV1)  */
 
-    set_sleep_mode(SLEEP_MODE_IDLE);            /* CPU only; TCB0/TCA0 keep running */
+    /* IDLE: CPU only; TCB0/TCA0 keep running. Sleep stays enabled (SEN), so
+     * every wait is a single SLEEP instruction (sleep_cpu). */
+    SLPCTRL.CTRLA = SLPCTRL_SMODE_IDLE_gc | SLPCTRL_SEN_bm;
     sei();
 }
 
@@ -639,7 +668,7 @@ int main(void)
                 mask = 1u;
                 led_on();
             }
-            sleep_mode();
+            sleep_cpu();
         }
         led_off();
         cfg_setup(k, mask);
@@ -656,7 +685,7 @@ int main(void)
                 power_down();
                 t_idle = ms_now();
             }
-            sleep_mode();
+            sleep_cpu();
         }
         g_rng ^= (uint16_t)(ms_now() ^ (uint16_t)(TCB0.CNT << 5));
         if (g_rng == 0u) {
@@ -674,7 +703,7 @@ int main(void)
                 tone_off();
                 led_off();
             }
-            sleep_mode();
+            sleep_cpu();
         } while (btn_down());
         tone_off();
         led_off();
